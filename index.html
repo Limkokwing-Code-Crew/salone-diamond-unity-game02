@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Salone Diamond | Flappy Bird Game</title>
   <link rel="shortcut icon" href="TemplateData/favicon.ico">
   <link rel="stylesheet" href="TemplateData/style.css">
@@ -586,13 +587,19 @@
 
         async submitScore(score) {
           if (!this.currentUser || !this.sessionToken) {
+            console.warn("User not logged in, cannot save score:", score);
             return false;
           }
+          console.log("Submitting score to Convex:", score);
           try {
             await runConvex("mutation", "leaderboard:submit", {
               sessionToken: this.sessionToken,
               score: Number(score),
             });
+            console.log("Score saved successfully!");
+            // Refresh high score & players list immediately
+            this.fetchGlobalHighScore();
+            this.fetchCurrentPlayers();
             return true;
           } catch (error) {
             console.error("Failed to submit score:", error);
@@ -621,8 +628,101 @@
       };
     }
 
-    window.submitScore = (score) => window.__gameApp ? window.__gameApp.submitScore(score) : Promise.resolve(false);
-    window.getCurrentUser = () => window.__gameApp ? window.__gameApp.currentUser : null;
+    // Global functions for Unity to call
+    window.submitScore = function (score) {
+      console.log("Unity submitted score:", score);
+      if (window.__gameApp) {
+        return window.__gameApp.submitScore(score);
+      } else {
+        console.warn("Game app not initialized, cannot submit score");
+        return Promise.resolve(false);
+      }
+    };
+
+    function parseUnityScore(value) {
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : NaN;
+      }
+      return NaN;
+    }
+
+    async function forwardUnityScore(value, sourceLabel) {
+      const score = parseUnityScore(value);
+      if (!Number.isFinite(score) || score < 0) {
+        console.warn("Invalid score from", sourceLabel + ":", value);
+        return false;
+      }
+      console.log(sourceLabel + " -> forwarding score:", score);
+      return window.submitScore(score);
+    }
+
+    // Unity WebGL .jslib callback target:
+    // SendScoreToJS(score) -> window.onUnityScoreUpdate(score)
+    window.onUnityScoreUpdate = function (score) {
+      return forwardUnityScore(score, "onUnityScoreUpdate");
+    };
+
+    // Alternate callback names some Unity scripts use.
+    window.onGameOverScore = function (score) {
+      return forwardUnityScore(score, "onGameOverScore");
+    };
+    window.receiveUnityScore = function (score) {
+      return forwardUnityScore(score, "receiveUnityScore");
+    };
+
+    // Optional pull helper (if Unity exposes a GameObject method for score reporting).
+    window.askUnityForScore = function (gameObjectName, methodName) {
+      const go = gameObjectName || "GameManager";
+      const method = methodName || "ReportScoreToJS";
+      if (!window.unityGameInstance || typeof window.unityGameInstance.SendMessage !== "function") {
+        console.warn("Unity instance not ready for SendMessage");
+        return false;
+      }
+      window.unityGameInstance.SendMessage(go, method);
+      return true;
+    };
+
+    window.getCurrentUser = function () {
+      if (window.__gameApp && window.__gameApp.currentUser) {
+        return JSON.stringify(window.__gameApp.currentUser);
+      }
+      return null;
+    };
+
+    window.getSessionToken = function () {
+      if (window.__gameApp && window.__gameApp.sessionToken) {
+        return window.__gameApp.sessionToken;
+      }
+      return null;
+    };
+
+    // Browser-console helper to validate score submission + high-score retrieval.
+    window.verifyScorePipeline = async function (testScore) {
+      if (!window.__gameApp) {
+        console.warn("Game app not initialized");
+        return { ok: false, reason: "app_not_initialized" };
+      }
+
+      const score = Number(testScore);
+      if (!Number.isFinite(score) || score < 0) {
+        console.warn("Pass a valid non-negative number. Example: verifyScorePipeline(42)");
+        return { ok: false, reason: "invalid_score" };
+      }
+
+      const submitted = await window.__gameApp.submitScore(score);
+      const latestHighScore = await runConvex("query", "leaderboard:getGlobalHighScore", {});
+
+      const result = {
+        ok: submitted,
+        submittedScore: score,
+        latestHighScore,
+      };
+      console.log("verifyScorePipeline:", result);
+      return result;
+    };
+
 
   </script>
 </body>
