@@ -108,11 +108,11 @@
       <form id="login-form" class="auth-form" :class="{ active: authTab === 'login' }" @submit.prevent="handleLogin()">
         <div class="form-group">
           <label for="login-email">Email</label>
-          <input type="email" id="login-email" x-model="loginForm.email" required>
+          <input type="email" id="login-email" x-model="loginForm.email" @keydown.stop @keyup.stop required>
         </div>
         <div class="form-group">
           <label for="login-password">Password</label>
-          <input type="password" id="login-password" x-model="loginForm.password" required>
+          <input type="password" id="login-password" x-model="loginForm.password" @keydown.stop @keyup.stop required>
         </div>
         <button type="submit" class="auth-submit-btn" :disabled="isSubmittingAuth">
           <i class="fas fa-sign-in-alt"></i>
@@ -124,15 +124,15 @@
         @submit.prevent="handleSignup()">
         <div class="form-group">
           <label for="signup-username">Username</label>
-          <input type="text" id="signup-username" x-model="signupForm.username" required>
+          <input type="text" id="signup-username" x-model="signupForm.username" @keydown.stop @keyup.stop required>
         </div>
         <div class="form-group">
           <label for="signup-email">Email</label>
-          <input type="email" id="signup-email" x-model="signupForm.email" required>
+          <input type="email" id="signup-email" x-model="signupForm.email" @keydown.stop @keyup.stop required>
         </div>
         <div class="form-group">
           <label for="signup-password">Password</label>
-          <input type="password" id="signup-password" x-model="signupForm.password" required>
+          <input type="password" id="signup-password" x-model="signupForm.password" @keydown.stop @keyup.stop required>
         </div>
         <button type="submit" class="auth-submit-btn" :disabled="isSubmittingAuth">
           <i class="fas fa-user-plus"></i>
@@ -443,11 +443,15 @@
         closeAuthModal() {
           this.isAuthModalOpen = false;
           this.clearAuthMessage();
-          setUnityKeyboardCapture(true);
+          const gameOverlay = document.querySelector(".game-overlay");
+          if (gameOverlay && gameOverlay.classList.contains("hidden")) {
+            setUnityKeyboardCapture(true);
+          }
         },
 
         async openLeaderboard(period) {
           this.isLeaderboardOpen = true;
+          setUnityKeyboardCapture(false);
           this.leaderboardPeriod = period;
           this.isLeaderboardLoading = true;
           try {
@@ -462,7 +466,10 @@
 
         closeLeaderboard() {
           this.isLeaderboardOpen = false;
-          setUnityKeyboardCapture(true);
+          const gameOverlay = document.querySelector(".game-overlay");
+          if (gameOverlay && gameOverlay.classList.contains("hidden")) {
+            setUnityKeyboardCapture(true);
+          }
         },
 
         showAuthMessage(message, type) {
