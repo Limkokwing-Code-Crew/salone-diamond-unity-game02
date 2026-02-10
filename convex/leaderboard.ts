@@ -17,48 +17,67 @@ export const getTopScores = query({
 export const getCurrentPlayers = query({
   args: {},
   handler: async (ctx) => {
-    const activeSessions = await ctx.db
+    // 1. Get the latest 50 sessions
+    const sessions = await ctx.db
       .query("sessions")
       .order("desc")
-      .take(50); // Take more to find enough unique users
+      .take(50);
 
-    const usersWithScores = await Promise.all(
-      activeSessions.map(async (session) => {
-        const user = await ctx.db.get(session.userId);
+    if (sessions.length === 0) return [];
+
+    // 2. Get unique user IDs from these sessions
+    const userIds = Array.from(new Set(sessions.map(s => s.userId)));
+
+    // 3. For each user, get their identity and best score
+    const players = await Promise.all(
+      userIds.map(async (userId) => {
+        const user = await ctx.db.get(userId);
         if (!user) return null;
 
-        // Get their best all-time score
+        // Fetch just the single best score for this user
         const bestScore = await ctx.db
           .query("scores")
-          .withIndex("by_user_period", (q) => q.eq("userId", user._id).eq("period", "alltime"))
+          .withIndex("by_user_period", (q) => q.eq("userId", userId).eq("period", "alltime"))
           .order("desc")
           .first();
+
+        // Get their latest session timestamp for this group
+        const latestSession = sessions.find(s => s.userId === userId);
 
         return {
           username: user.username,
           score: bestScore ? bestScore.score : 0,
-          activeAt: session.createdAt,
+          activeAt: latestSession ? latestSession.createdAt : 0,
         };
       })
     );
 
-    // Filter nulls and deduplicate by username, keeping the highest score found
-    const uniqueMap = new Map();
-    for (const item of usersWithScores) {
-      if (!item) continue;
-      if (!uniqueMap.has(item.username) || item.score > uniqueMap.get(item.username).score) {
-        uniqueMap.set(item.username, item);
-      }
-    }
-
-    const result = Array.from(uniqueMap.values());
-
-    // Sort by score descending
-    result.sort((a, b) => b.score - a.score);
-
-    return result;
+    // 4. Filter nulls and sort by score
+    return players
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .sort((a, b) => b.score - a.score);
   },
 });
+
+export const getGlobalHighScore = query({
+  args: {},
+  handler: async (ctx) => {
+    const topScore = await ctx.db
+      .query("scores")
+      .withIndex("by_period_score", (q) => q.eq("period", "alltime"))
+      .order("desc")
+      .first();
+
+    if (!topScore) return null;
+
+    return {
+      username: topScore.username,
+      score: topScore.score,
+    };
+  },
+});
+
+
 
 
 

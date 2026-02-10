@@ -113,6 +113,9 @@ export const getSessionUser = query({
       return null;
     }
 
+    // Update session timestamp to keep user in "Current Players" list
+    await ctx.db.patch(session._id, { createdAt: Date.now() });
+
     return {
       _id: user._id,
       username: user.username,

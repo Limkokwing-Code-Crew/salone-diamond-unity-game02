@@ -29,7 +29,8 @@
       <div class="header-stats">
         <div class="stat-item">
           <i class="fas fa-trophy"></i>
-          <span>High Score</span>
+          <span
+            x-text="globalHighScore ? `${globalHighScore.username}: ${globalHighScore.score}` : 'Loading...'"></span>
         </div>
         <div class="stat-item" id="auth-button" @click="openAuthModal()">
           <i class="fas" :class="currentUser ? 'fa-user-check' : 'fa-user'"></i>
@@ -164,7 +165,10 @@
             <span>Loading scores...</span>
           </div>
           <template x-if="!isLeaderboardLoading && leaderboardScores.length === 0">
-            <p style="text-align: center; color: rgba(255,255,255,0.7);">No scores available</p>
+            <div style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.7);">
+              <i class="fas fa-users-slash" style="font-size: 2rem; display: block; margin-bottom: 1rem;"></i>
+              <p>No other players currently logged in.</p>
+            </div>
           </template>
           <template x-for="(score, index) in leaderboardScores" :key="score._id || `${score.username}-${index}`">
             <div class="leaderboard-item">
@@ -383,6 +387,7 @@
         authMessage: { text: "", type: "info" },
         loginForm: { email: "", password: "" },
         signupForm: { username: "", email: "", password: "" },
+        globalHighScore: null,
 
         init() {
           const savedUser = localStorage.getItem("gameUser");
@@ -393,6 +398,17 @@
             this.validateSession();
           }
           window.__gameApp = this;
+          this.fetchGlobalHighScore();
+          // Periodically refresh high score
+          setInterval(() => this.fetchGlobalHighScore(), 30000);
+        },
+
+        async fetchGlobalHighScore() {
+          try {
+            this.globalHighScore = await runConvex("query", "leaderboard:getGlobalHighScore", {});
+          } catch (error) {
+            console.warn("Failed to fetch high score:", error);
+          }
         },
 
         async validateSession() {
@@ -450,11 +466,22 @@
           this.isLeaderboardOpen = true;
           setUnityKeyboardCapture(false);
           this.isLeaderboardLoading = true;
+          this.fetchCurrentPlayers();
+
+          // Auto-refresh every 10 seconds while modal is open
+          this.__leaderboardInterval = setInterval(() => {
+            if (this.isLeaderboardOpen) this.fetchCurrentPlayers();
+            else clearInterval(this.__leaderboardInterval);
+          }, 10000);
+        },
+
+        async fetchCurrentPlayers() {
           try {
-            this.leaderboardScores = await runConvex("query", "leaderboard:getCurrentPlayers", {});
+            const players = await runConvex("query", "leaderboard:getCurrentPlayers", {});
+            this.leaderboardScores = players || [];
           } catch (error) {
             console.error("Failed to load current players:", error);
-            this.leaderboardScores = [];
+            this.showAuthMessage("Failed to load players: " + error.message, "error");
           } finally {
             this.isLeaderboardLoading = false;
           }
@@ -462,6 +489,7 @@
 
         closeLeaderboard() {
           this.isLeaderboardOpen = false;
+          if (this.__leaderboardInterval) clearInterval(this.__leaderboardInterval);
           const gameOverlay = document.querySelector(".game-overlay");
           if (gameOverlay && gameOverlay.classList.contains("hidden")) {
             setUnityKeyboardCapture(true);
