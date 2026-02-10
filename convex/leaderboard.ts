@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 const periodValidator = v.union(v.literal("daily"), v.literal("weekly"), v.literal("alltime"));
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 export const getTopScores = query({
   args: { period: periodValidator },
@@ -17,16 +18,26 @@ export const getTopScores = query({
 export const getCurrentPlayers = query({
   args: {},
   handler: async (ctx) => {
-    // 1. Get the latest 50 sessions
+    const cutoff = Date.now() - ONLINE_WINDOW_MS;
+
+    // 1. Get latest sessions and keep only recently active users.
     const sessions = await ctx.db
       .query("sessions")
       .order("desc")
-      .take(50);
+      .take(200);
 
-    if (sessions.length === 0) return [];
+    const recentSessions = sessions.filter((s) => (s.lastSeenAt ?? s.createdAt) >= cutoff);
 
-    // 2. Get unique user IDs from these sessions
-    const userIds = Array.from(new Set(sessions.map(s => s.userId)));
+    if (recentSessions.length === 0) return [];
+
+    // 2. Keep one entry per user (the most recent session).
+    const latestSessionByUser = new Map();
+    for (const session of recentSessions) {
+      if (!latestSessionByUser.has(session.userId)) {
+        latestSessionByUser.set(session.userId, session);
+      }
+    }
+    const userIds = Array.from(latestSessionByUser.keys());
 
     // 3. For each user, get their identity and best score
     const players = await Promise.all(
@@ -42,7 +53,7 @@ export const getCurrentPlayers = query({
           .first();
 
         // Get their latest session timestamp for this group
-        const latestSession = sessions.find(s => s.userId === userId);
+        const latestSession = latestSessionByUser.get(userId);
 
         return {
           username: user.username,

@@ -384,6 +384,7 @@
         leaderboardPeriod: "daily",
         leaderboardScores: [],
         triggeredByStartGame: false,
+        sessionHeartbeatIntervalId: null,
         authMessage: { text: "", type: "info" },
         loginForm: { email: "", password: "" },
         signupForm: { username: "", email: "", password: "" },
@@ -423,8 +424,35 @@
             }
             this.currentUser = user;
             localStorage.setItem("gameUser", JSON.stringify(user));
+            await this.touchSession();
+            this.startSessionHeartbeat();
           } catch (error) {
             console.warn("Session validation failed:", error);
+          }
+        },
+
+        async touchSession() {
+          if (!this.sessionToken) return;
+          try {
+            await runConvex("mutation", "auth:touchSession", { sessionToken: this.sessionToken });
+          } catch (error) {
+            console.warn("Session heartbeat failed:", error);
+          }
+        },
+
+        startSessionHeartbeat() {
+          if (this.sessionHeartbeatIntervalId) {
+            clearInterval(this.sessionHeartbeatIntervalId);
+          }
+          this.sessionHeartbeatIntervalId = setInterval(() => {
+            this.touchSession();
+          }, 20000);
+        },
+
+        stopSessionHeartbeat() {
+          if (this.sessionHeartbeatIntervalId) {
+            clearInterval(this.sessionHeartbeatIntervalId);
+            this.sessionHeartbeatIntervalId = null;
           }
         },
 
@@ -513,6 +541,8 @@
             this.sessionToken = result.sessionToken;
             localStorage.setItem("gameToken", result.sessionToken);
             localStorage.setItem("gameUser", JSON.stringify(result.user));
+            await this.touchSession();
+            this.startSessionHeartbeat();
             this.loginForm = { email: "", password: "" };
             this.showAuthMessage("Login successful!", "success");
             setTimeout(() => {
@@ -537,6 +567,8 @@
             this.sessionToken = result.sessionToken;
             localStorage.setItem("gameToken", result.sessionToken);
             localStorage.setItem("gameUser", JSON.stringify(result.user));
+            await this.touchSession();
+            this.startSessionHeartbeat();
             this.signupForm = { username: "", email: "", password: "" };
             this.showAuthMessage("Account created!", "success");
             setTimeout(() => {
@@ -569,6 +601,7 @@
         },
 
         logout() {
+          this.stopSessionHeartbeat();
           this.currentUser = null;
           this.sessionToken = null;
           localStorage.removeItem("gameToken");

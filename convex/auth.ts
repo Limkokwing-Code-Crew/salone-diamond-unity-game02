@@ -43,11 +43,13 @@ export const signup = mutation({
       createdAt: Date.now(),
     });
 
+    const now = Date.now();
     const sessionToken = generateToken();
     await ctx.db.insert("sessions", {
       userId,
       token: sessionToken,
-      createdAt: Date.now(),
+      createdAt: now,
+      lastSeenAt: now,
     });
 
     return {
@@ -77,11 +79,13 @@ export const login = mutation({
       throw new Error("Invalid credentials");
     }
 
+    const now = Date.now();
     const sessionToken = generateToken();
     await ctx.db.insert("sessions", {
       userId: user._id,
       token: sessionToken,
-      createdAt: Date.now(),
+      createdAt: now,
+      lastSeenAt: now,
     });
 
     return {
@@ -113,13 +117,27 @@ export const getSessionUser = query({
       return null;
     }
 
-    // Update session timestamp to keep user in "Current Players" list
-    await ctx.db.patch(session._id, { createdAt: Date.now() });
-
     return {
       _id: user._id,
       username: user.username,
       email: user.email,
     };
+  },
+});
+
+export const touchSession = mutation({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("token", args.sessionToken))
+      .unique();
+
+    if (!session) {
+      return { ok: false };
+    }
+
+    await ctx.db.patch(session._id, { lastSeenAt: Date.now() });
+    return { ok: true };
   },
 });

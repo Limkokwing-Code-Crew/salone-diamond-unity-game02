@@ -13,6 +13,7 @@ export default defineSchema({
     userId: v.id("users"),
     token: v.string(),
     createdAt: v.number(),
+    lastSeenAt: v.optional(v.number()),
   }).index("by_token", ["token"]),
 
   scores: defineTable({
