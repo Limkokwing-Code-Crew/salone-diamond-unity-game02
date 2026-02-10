@@ -35,9 +35,9 @@
           <i class="fas" :class="currentUser ? 'fa-user-check' : 'fa-user'"></i>
           <span x-text="currentUser ? currentUser.username : 'Login'"></span>
         </div>
-        <div class="stat-item" id="leaderboard-toggle" @click="openLeaderboard('daily')">
+        <div class="stat-item" id="leaderboard-toggle" @click="openLeaderboard()">
           <i class="fas fa-crown"></i>
-          <span>Top Players</span>
+          <span>Current Players</span>
         </div>
       </div>
     </div>
@@ -149,21 +149,14 @@
   <div id="leaderboard-modal" class="modal" :class="{ active: isLeaderboardOpen }" @click.self="closeLeaderboard()">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>🏆 Top Players</h2>
+        <h2>🏆 Current Players</h2>
         <button class="close-btn" id="close-leaderboard" @click="closeLeaderboard()">
           <i class="fas fa-times"></i>
         </button>
       </div>
 
       <div class="leaderboard-content">
-        <div class="leaderboard-tabs">
-          <button class="tab-btn" id="daily-tab" :class="{ active: leaderboardPeriod === 'daily' }"
-            @click="openLeaderboard('daily')">Daily</button>
-          <button class="tab-btn" id="weekly-tab" :class="{ active: leaderboardPeriod === 'weekly' }"
-            @click="openLeaderboard('weekly')">Weekly</button>
-          <button class="tab-btn" id="all-time-tab" :class="{ active: leaderboardPeriod === 'alltime' }"
-            @click="openLeaderboard('alltime')">All Time</button>
-        </div>
+        <!-- Removed period tabs for Current Players as requested -->
 
         <div class="leaderboard-list" id="leaderboard-list">
           <div class="loading-spinner" x-show="isLeaderboardLoading">
@@ -181,8 +174,10 @@
               <div class="leaderboard-info">
                 <div class="leaderboard-username" x-text="score.username"></div>
                 <div class="leaderboard-score">
-                  Score:
-                  <span class="leaderboard-score-value" x-text="score.score"></span>
+                  Score: <span class="leaderboard-score-value" x-text="score.score || 0"></span>
+                  <span style="color: #4cd137; margin-left: 0.5rem; font-size: 0.8rem;">
+                    <i class="fas fa-circle" style="font-size: 0.5rem;"></i> Online
+                  </span>
                 </div>
               </div>
             </div>
@@ -345,7 +340,7 @@
     document.body.appendChild(script);
 
     // Alpine + Convex integration
-    const convexDeploymentUrl = window.CONVEX_URL || "https://YOUR_CONVEX_DEPLOYMENT.convex.cloud";
+    const convexDeploymentUrl = "https://dusty-heron-86.convex.cloud";
     const hasConvexUrl = !convexDeploymentUrl.includes("YOUR_CONVEX_DEPLOYMENT");
     const convexClientPromise = hasConvexUrl
       ? import("https://esm.sh/convex@1.25.4/browser")
@@ -384,6 +379,7 @@
         authTab: "login",
         leaderboardPeriod: "daily",
         leaderboardScores: [],
+        triggeredByStartGame: false,
         authMessage: { text: "", type: "info" },
         loginForm: { email: "", password: "" },
         signupForm: { username: "", email: "", password: "" },
@@ -428,8 +424,9 @@
           });
         },
 
-        openAuthModal() {
+        openAuthModal(triggeredByStart = false) {
           this.isAuthModalOpen = true;
+          this.triggeredByStartGame = triggeredByStart;
           setUnityKeyboardCapture(false);
           this.$nextTick(() => {
             const inputId = this.authTab === "login" ? "login-email" : "signup-username";
@@ -449,15 +446,14 @@
           }
         },
 
-        async openLeaderboard(period) {
+        async openLeaderboard() {
           this.isLeaderboardOpen = true;
           setUnityKeyboardCapture(false);
-          this.leaderboardPeriod = period;
           this.isLeaderboardLoading = true;
           try {
-            this.leaderboardScores = await runConvex("query", "leaderboard:getTopScores", { period });
+            this.leaderboardScores = await runConvex("query", "leaderboard:getCurrentPlayers", {});
           } catch (error) {
-            console.error("Failed to load leaderboard:", error);
+            console.error("Failed to load current players:", error);
             this.leaderboardScores = [];
           } finally {
             this.isLeaderboardLoading = false;
@@ -491,7 +487,12 @@
             localStorage.setItem("gameUser", JSON.stringify(result.user));
             this.loginForm = { email: "", password: "" };
             this.showAuthMessage("Login successful!", "success");
-            setTimeout(() => this.closeAuthModal(), 900);
+            setTimeout(() => {
+              this.closeAuthModal();
+              if (this.triggeredByStartGame) {
+                this.startGame();
+              }
+            }, 900);
           } catch (error) {
             this.showAuthMessage(error.message || "Login failed", "error");
           } finally {
@@ -510,7 +511,12 @@
             localStorage.setItem("gameUser", JSON.stringify(result.user));
             this.signupForm = { username: "", email: "", password: "" };
             this.showAuthMessage("Account created!", "success");
-            setTimeout(() => this.closeAuthModal(), 900);
+            setTimeout(() => {
+              this.closeAuthModal();
+              if (this.triggeredByStartGame) {
+                this.startGame();
+              }
+            }, 900);
           } catch (error) {
             this.showAuthMessage(error.message || "Signup failed", "error");
           } finally {
@@ -543,7 +549,7 @@
 
         startGame() {
           if (!this.currentUser) {
-            this.openAuthModal();
+            this.openAuthModal(true);
             return;
           }
           const gameOverlay = document.querySelector(".game-overlay");

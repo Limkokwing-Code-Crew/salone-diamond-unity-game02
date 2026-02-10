@@ -14,6 +14,54 @@ export const getTopScores = query({
   },
 });
 
+export const getCurrentPlayers = query({
+  args: {},
+  handler: async (ctx) => {
+    const activeSessions = await ctx.db
+      .query("sessions")
+      .order("desc")
+      .take(50); // Take more to find enough unique users
+
+    const usersWithScores = await Promise.all(
+      activeSessions.map(async (session) => {
+        const user = await ctx.db.get(session.userId);
+        if (!user) return null;
+
+        // Get their best all-time score
+        const bestScore = await ctx.db
+          .query("scores")
+          .withIndex("by_user_period", (q) => q.eq("userId", user._id).eq("period", "alltime"))
+          .order("desc")
+          .first();
+
+        return {
+          username: user.username,
+          score: bestScore ? bestScore.score : 0,
+          activeAt: session.createdAt,
+        };
+      })
+    );
+
+    // Filter nulls and deduplicate by username, keeping the highest score found
+    const uniqueMap = new Map();
+    for (const item of usersWithScores) {
+      if (!item) continue;
+      if (!uniqueMap.has(item.username) || item.score > uniqueMap.get(item.username).score) {
+        uniqueMap.set(item.username, item);
+      }
+    }
+
+    const result = Array.from(uniqueMap.values());
+
+    // Sort by score descending
+    result.sort((a, b) => b.score - a.score);
+
+    return result;
+  },
+});
+
+
+
 export const submit = mutation({
   args: {
     sessionToken: v.string(),
