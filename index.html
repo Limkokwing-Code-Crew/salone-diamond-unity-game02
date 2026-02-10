@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Salone Diamond | Flappy Bird Game</title>
+  <link rel="shortcut icon" href="TemplateData/favicon.ico">
+  <link rel="stylesheet" href="TemplateData/style.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body x-data="gameApp()" x-init="init()">
+  <div class="game-header">
+    <div class="header-content">
+      <div class="logo-section">
+        <h1 class="game-title">Salone Diamond</h1>
+        <p class="game-subtitle">Flappy Diamond Adventure</p>
+      </div>
+      <div class="header-stats">
+        <div class="stat-item">
+          <i class="fas fa-trophy"></i>
+          <span>High Score</span>
+        </div>
+        <div class="stat-item" id="auth-button" @click="openAuthModal()">
+          <i class="fas" :class="currentUser ? 'fa-user-check' : 'fa-user'"></i>
+          <span x-text="currentUser ? currentUser.username : 'Login'"></span>
+        </div>
+        <div class="stat-item" id="leaderboard-toggle" @click="openLeaderboard('daily')">
+          <i class="fas fa-crown"></i>
+          <span>Top Players</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="unity-container" class="unity-desktop">
+    <div class="game-wrapper">
+      <canvas id="unity-canvas" width=1280 height=720 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div class="loading-text">Loading Game...</div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+      <div class="game-overlay">
+        <div class="overlay-content">
+          <h2>How to Play</h2>
+          <div class="instructions">
+            <div class="instruction-item">
+              <i class="fas fa-mouse"></i>
+              <span>Click or Tap to Fly</span>
+            </div>
+            <div class="instruction-item">
+              <i class="fas fa-flag-checkered"></i>
+              <span>Avoid the Pipes</span>
+            </div>
+            <div class="instruction-item">
+              <i class="fas fa-star"></i>
+              <span>Beat Your High Score</span>
+            </div>
+          </div>
+          <button class="play-button" id="start-game" @click="startGame()">
+            <i class="fas fa-play"></i>
+            Start Game
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="unity-footer">
+      <div id="unity-logo-title-footer"
+        style="background: url('TemplateData/limkokwing-logo.png') no-repeat center; background-size: contain;"></div>
+      <div id="unity-fullscreen-button" class="fullscreen-btn">
+        <i class="fas fa-expand"></i>
+      </div>
+      <div id="unity-build-title">Limkokwing University | Game Development Project</div>
+    </div>
+  </div>
+
+  <!-- Authentication Popup Modal -->
+  <div id="auth-modal" class="modal" :class="{ active: isAuthModalOpen }" @click.self="closeAuthModal()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="auth-title" x-text="authTab === 'login' ? 'Login' : 'Sign Up'">Login</h2>
+        <button class="close-btn" id="close-auth" @click="closeAuthModal()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="tab-btn" id="login-tab" :class="{ active: authTab === 'login' }"
+          @click="setAuthTab('login')">Login</button>
+        <button class="tab-btn" id="signup-tab" :class="{ active: authTab === 'signup' }"
+          @click="setAuthTab('signup')">Sign Up</button>
+      </div>
+
+      <form id="login-form" class="auth-form" :class="{ active: authTab === 'login' }" @submit.prevent="handleLogin()">
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" x-model="loginForm.email" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" x-model="loginForm.password" required>
+        </div>
+        <button type="submit" class="auth-submit-btn" :disabled="isSubmittingAuth">
+          <i class="fas fa-sign-in-alt"></i>
+          Login
+        </button>
+      </form>
+
+      <form id="signup-form" class="auth-form" :class="{ active: authTab === 'signup' }"
+        @submit.prevent="handleSignup()">
+        <div class="form-group">
+          <label for="signup-username">Username</label>
+          <input type="text" id="signup-username" x-model="signupForm.username" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-email">Email</label>
+          <input type="email" id="signup-email" x-model="signupForm.email" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" x-model="signupForm.password" required>
+        </div>
+        <button type="submit" class="auth-submit-btn" :disabled="isSubmittingAuth">
+          <i class="fas fa-user-plus"></i>
+          Sign Up
+        </button>
+      </form>
+
+      <div class="auth-message" id="auth-message" :class="authMessage.type" x-show="authMessage.text"
+        x-text="authMessage.text"></div>
+    </div>
+  </div>
+
+  <!-- Leaderboard Modal -->
+  <div id="leaderboard-modal" class="modal" :class="{ active: isLeaderboardOpen }" @click.self="closeLeaderboard()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🏆 Top Players</h2>
+        <button class="close-btn" id="close-leaderboard" @click="closeLeaderboard()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="leaderboard-content">
+        <div class="leaderboard-tabs">
+          <button class="tab-btn" id="daily-tab" :class="{ active: leaderboardPeriod === 'daily' }"
+            @click="openLeaderboard('daily')">Daily</button>
+          <button class="tab-btn" id="weekly-tab" :class="{ active: leaderboardPeriod === 'weekly' }"
+            @click="openLeaderboard('weekly')">Weekly</button>
+          <button class="tab-btn" id="all-time-tab" :class="{ active: leaderboardPeriod === 'alltime' }"
+            @click="openLeaderboard('alltime')">All Time</button>
+        </div>
+
+        <div class="leaderboard-list" id="leaderboard-list">
+          <div class="loading-spinner" x-show="isLeaderboardLoading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading scores...</span>
+          </div>
+          <template x-if="!isLeaderboardLoading && leaderboardScores.length === 0">
+            <p style="text-align: center; color: rgba(255,255,255,0.7);">No scores available</p>
+          </template>
+          <template x-for="(score, index) in leaderboardScores" :key="score._id || `${score.username}-${index}`">
+            <div class="leaderboard-item">
+              <div class="leaderboard-rank"
+                :class="index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : 'other'"
+                x-text="index + 1"></div>
+              <div class="leaderboard-info">
+                <div class="leaderboard-username" x-text="score.username"></div>
+                <div class="leaderboard-score">
+                  Score:
+                  <span class="leaderboard-score-value" x-text="score.score"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var canvas = document.querySelector("#unity-canvas");
+    window.unityGameInstance = null;
+
+    function setUnityKeyboardCapture(enabled) {
+      const instance = window.unityGameInstance;
+      if (!instance || !instance.Module) {
+        return;
+      }
+      try {
+        if (instance.Module.WebGLInput) {
+          instance.Module.WebGLInput.captureAllKeyboardInput = enabled;
+        }
+      } catch (error) {
+        console.warn("WebGLInput keyboard capture toggle failed:", error);
+      }
+      try {
+        instance.Module.webglInputCaptureAll = enabled;
+      } catch (error) {
+        console.warn("webglInputCaptureAll toggle failed:", error);
+      }
+    }
+
+    // Shows a temporary message banner/ribbon for a few seconds, or
+    // a permanent error message on top of the canvas if type=='error'.
+    // If type=='warning', a yellow highlight color is used.
+    // Modify or remove this function to customize the visually presented
+    // way that non-critical warnings and error messages are presented to the
+    // user.
+    function unityShowBanner(msg, type) {
+      var warningBanner = document.querySelector("#unity-warning");
+      function updateBannerVisibility() {
+        warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+      }
+      var div = document.createElement('div');
+      div.innerHTML = msg;
+      warningBanner.appendChild(div);
+      if (type == 'error') div.style = 'background: red; padding: 10px;';
+      else {
+        if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+        setTimeout(function () {
+          warningBanner.removeChild(div);
+          updateBannerVisibility();
+        }, 5000);
+      }
+      updateBannerVisibility();
+    }
+
+    var buildUrl = "Build";
+    var loaderUrl = buildUrl + "/BUILD04.loader.js";
+    var config = {
+      arguments: [],
+      dataUrl: buildUrl + "/BUILD04.data.unityweb",
+      frameworkUrl: buildUrl + "/BUILD04.framework.js.unityweb",
+      codeUrl: buildUrl + "/BUILD04.wasm.unityweb",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "Flappy-Bird",
+      productVersion: "1.0",
+      showBanner: unityShowBanner,
+      // errorHandler: function(err, url, line) {
+      //    alert("error " + err + " occurred at line " + line);
+      //    // Return 'true' if you handled this error and don't want Unity
+      //    // to process it further, 'false' otherwise.
+      //    return true;
+      // },
+    };
+
+    // By default, Unity keeps WebGL canvas render target size matched with
+    // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+    // Set this to false if you want to decouple this synchronization from
+    // happening inside the engine, and you would instead like to size up
+    // the canvas DOM size and WebGL render target sizes yourself.
+    // config.matchWebGLToCanvasSize = false;
+
+    // If you would like all file writes inside Unity Application.persistentDataPath
+    // directory to automatically persist so that the contents are remembered when
+    // the user revisits the site the next time, uncomment the following line:
+    // config.autoSyncPersistentDataPath = true;
+    // This autosyncing is currently not the default behavior to avoid regressing
+    // existing user projects that might rely on the earlier manual
+    // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
+    // expected to change.
+
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      // Mobile device style: fill the whole browser client area with the game canvas:
+      var meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+      document.getElementsByTagName('head')[0].appendChild(meta);
+      document.querySelector("#unity-container").className = "unity-mobile";
+      canvas.className = "unity-mobile";
+
+      // Add touch support for better mobile experience
+      canvas.addEventListener('touchstart', function (e) {
+        e.preventDefault();
+        canvas.focus();
+      });
+
+      // Hide overlay on mobile touch
+      const gameOverlay = document.querySelector('.game-overlay');
+      if (gameOverlay) {
+        gameOverlay.addEventListener('touchstart', function (e) {
+          if (e.target === gameOverlay || gameOverlay.contains(e.target)) {
+            e.preventDefault();
+            gameOverlay.classList.add('hidden');
+            canvas.focus();
+          }
+        });
+      }
+
+      // To lower canvas resolution on mobile devices to gain some
+      // performance, uncomment the following line:
+      // config.devicePixelRatio = 1;
+
+    } else {
+      // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
+      canvas.style.width = "1280px";
+      canvas.style.height = "720px";
+    }
+
+    document.querySelector("#unity-loading-bar").style.display = "block";
+
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      createUnityInstance(canvas, config, (progress) => {
+        document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+      }).then((unityInstance) => {
+        window.unityGameInstance = unityInstance;
+        setUnityKeyboardCapture(false);
+        document.querySelector("#unity-loading-bar").style.display = "none";
+
+        // Enhanced fullscreen button functionality
+        const fullscreenBtn = document.querySelector("#unity-fullscreen-button");
+        fullscreenBtn.onclick = () => {
+          if (!document.fullscreenElement) {
+            unityInstance.SetFullscreen(1);
+            fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+          } else {
+            document.exitFullscreen();
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+          }
+        };
+
+      }).catch((message) => {
+        alert(message);
+      });
+    };
+
+    document.body.appendChild(script);
+
+    // Alpine + Convex integration
+    const convexDeploymentUrl = window.CONVEX_URL || "https://YOUR_CONVEX_DEPLOYMENT.convex.cloud";
+    const hasConvexUrl = !convexDeploymentUrl.includes("YOUR_CONVEX_DEPLOYMENT");
+    const convexClientPromise = hasConvexUrl
+      ? import("https://esm.sh/convex@1.25.4/browser")
+        .then(({ ConvexHttpClient }) => new ConvexHttpClient(convexDeploymentUrl))
+      : Promise.resolve(null);
+
+    async function runConvex(kind, functionName, args) {
+      const client = await convexClientPromise;
+      if (!client) {
+        throw new Error("Set window.CONVEX_URL to your Convex deployment URL.");
+      }
+      try {
+        return await client[kind](functionName, args);
+      } catch (error) {
+        if (typeof functionName === "string") {
+          return client[kind]({ _name: functionName }, args);
+        }
+        throw error;
+      }
+    }
+
+    // This event listener is intentionally removed to allow input fields to work properly.
+    // Unity's keyboard capture is managed via setUnityKeyboardCapture() function
+    // which is called when modals open/close.
+
+
+
+    function gameApp() {
+      return {
+        currentUser: null,
+        sessionToken: null,
+        isAuthModalOpen: false,
+        isLeaderboardOpen: false,
+        isSubmittingAuth: false,
+        isLeaderboardLoading: false,
+        authTab: "login",
+        leaderboardPeriod: "daily",
+        leaderboardScores: [],
+        authMessage: { text: "", type: "info" },
+        loginForm: { email: "", password: "" },
+        signupForm: { username: "", email: "", password: "" },
+
+        init() {
+          const savedUser = localStorage.getItem("gameUser");
+          const savedToken = localStorage.getItem("gameToken");
+          if (savedUser && savedToken) {
+            this.currentUser = JSON.parse(savedUser);
+            this.sessionToken = savedToken;
+            this.validateSession();
+          }
+          window.__gameApp = this;
+        },
+
+        async validateSession() {
+          if (!this.sessionToken) {
+            return;
+          }
+          try {
+            const user = await runConvex("query", "auth:getSessionUser", { sessionToken: this.sessionToken });
+            if (!user) {
+              this.logout();
+              return;
+            }
+            this.currentUser = user;
+            localStorage.setItem("gameUser", JSON.stringify(user));
+          } catch (error) {
+            console.warn("Session validation failed:", error);
+          }
+        },
+
+        setAuthTab(tab) {
+          this.authTab = tab;
+          this.clearAuthMessage();
+          this.$nextTick(() => {
+            const inputId = tab === "login" ? "login-email" : "signup-username";
+            const inputEl = document.getElementById(inputId);
+            if (inputEl) {
+              inputEl.focus();
+            }
+          });
+        },
+
+        openAuthModal() {
+          this.isAuthModalOpen = true;
+          setUnityKeyboardCapture(false);
+          this.$nextTick(() => {
+            const inputId = this.authTab === "login" ? "login-email" : "signup-username";
+            const inputEl = document.getElementById(inputId);
+            if (inputEl) {
+              inputEl.focus();
+            }
+          });
+        },
+
+        closeAuthModal() {
+          this.isAuthModalOpen = false;
+          this.clearAuthMessage();
+          setUnityKeyboardCapture(true);
+        },
+
+        async openLeaderboard(period) {
+          this.isLeaderboardOpen = true;
+          this.leaderboardPeriod = period;
+          this.isLeaderboardLoading = true;
+          try {
+            this.leaderboardScores = await runConvex("query", "leaderboard:getTopScores", { period });
+          } catch (error) {
+            console.error("Failed to load leaderboard:", error);
+            this.leaderboardScores = [];
+          } finally {
+            this.isLeaderboardLoading = false;
+          }
+        },
+
+        closeLeaderboard() {
+          this.isLeaderboardOpen = false;
+          setUnityKeyboardCapture(true);
+        },
+
+        showAuthMessage(message, type) {
+          this.authMessage = { text: message, type: type };
+        },
+
+        clearAuthMessage() {
+          this.authMessage = { text: "", type: "info" };
+        },
+
+        async handleLogin() {
+          this.isSubmittingAuth = true;
+          this.showAuthMessage("Logging in...", "info");
+          try {
+            const result = await runConvex("mutation", "auth:login", this.loginForm);
+            this.currentUser = result.user;
+            this.sessionToken = result.sessionToken;
+            localStorage.setItem("gameToken", result.sessionToken);
+            localStorage.setItem("gameUser", JSON.stringify(result.user));
+            this.loginForm = { email: "", password: "" };
+            this.showAuthMessage("Login successful!", "success");
+            setTimeout(() => this.closeAuthModal(), 900);
+          } catch (error) {
+            this.showAuthMessage(error.message || "Login failed", "error");
+          } finally {
+            this.isSubmittingAuth = false;
+          }
+        },
+
+        async handleSignup() {
+          this.isSubmittingAuth = true;
+          this.showAuthMessage("Creating account...", "info");
+          try {
+            const result = await runConvex("mutation", "auth:signup", this.signupForm);
+            this.currentUser = result.user;
+            this.sessionToken = result.sessionToken;
+            localStorage.setItem("gameToken", result.sessionToken);
+            localStorage.setItem("gameUser", JSON.stringify(result.user));
+            this.signupForm = { username: "", email: "", password: "" };
+            this.showAuthMessage("Account created!", "success");
+            setTimeout(() => this.closeAuthModal(), 900);
+          } catch (error) {
+            this.showAuthMessage(error.message || "Signup failed", "error");
+          } finally {
+            this.isSubmittingAuth = false;
+          }
+        },
+
+        async submitScore(score) {
+          if (!this.currentUser || !this.sessionToken) {
+            return false;
+          }
+          try {
+            await runConvex("mutation", "leaderboard:submit", {
+              sessionToken: this.sessionToken,
+              score: Number(score),
+            });
+            return true;
+          } catch (error) {
+            console.error("Failed to submit score:", error);
+            return false;
+          }
+        },
+
+        logout() {
+          this.currentUser = null;
+          this.sessionToken = null;
+          localStorage.removeItem("gameToken");
+          localStorage.removeItem("gameUser");
+        },
+
+        startGame() {
+          if (!this.currentUser) {
+            this.openAuthModal();
+            return;
+          }
+          const gameOverlay = document.querySelector(".game-overlay");
+          gameOverlay.classList.add("hidden");
+          setUnityKeyboardCapture(true);
+          canvas.focus();
+        },
+      };
+    }
+
+    window.submitScore = (score) => window.__gameApp ? window.__gameApp.submitScore(score) : Promise.resolve(false);
+    window.getCurrentUser = () => window.__gameApp ? window.__gameApp.currentUser : null;
+
+  </script>
+</body>
+
+</html>
